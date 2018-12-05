@@ -1,5 +1,5 @@
 from torch.utils.data import Dataset, DataLoader
-import numpy as np
+import torch
 
 
 def _extract_tags(line):
@@ -14,20 +14,40 @@ class Sentense_loader(Dataset):
     training/testing loader
     """
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, transform=None):
+        self.transform = transform
+        self.UNKNOWN_WORD = "<UNK>"
+
         f = open(file_path, 'r')
         lines = f.read().split("\n\n")
         lines = [line.split("\n") for line in lines]
         self.data = [_extract_tags(line) for line in lines]
-        self.data = np.asarray(self.data)
+        self.word_to_ix = {}
+        for tagged in self.data:
+            sentence = tagged[0]
+            for word in sentence:
+                if word not in self.word_to_ix:
+                    self.word_to_ix[word] = len(self.word_to_ix)
+        self.word_to_ix[self.UNKNOWN_WORD] = len(self.word_to_ix)
+
+    def prepare_sequence(self, seq):
+        idxs = []
+        for w in seq:
+            if w not in self.word_to_ix:
+                w = self.UNKNOWN_WORD
+            idxs.append(self.word_to_ix[w])
+        return idxs
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        sentence = self.data[idx][0]
+        sentence = self.prepare_sequence(self.data[idx][0])
         label = self.data[idx][1]
-        return {'sentence': sentence, 'label': label}
+        sample = {'sentence': sentence, 'label': label}
+        if self.transform:
+            sample = self.transform(sample)
+        return sample
 
 
 if __name__ == '__main__':
